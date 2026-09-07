@@ -1,50 +1,233 @@
 const $ = id => document.getElementById(id);
-const fields = ['produto','cultura','area','propriedade','dataInicio','dataFim','latitude','longitude','municipio','precisao','vento','umidade','temperatura','receita','art','notaFiscal','serie','aplicador','cpf','assinaturaAplicador','assinaturaProdutor','observacoes'];
-const DEFAULTS = {propriedade:'AGROPECUÁRIA PAINEIRA',aplicador:'MARCIO GRIGOLETTO ESPINDOLA',cpf:'976.068.470-53',assinaturaAplicador:'MARCIO GRIGOLETTO ESPINDOLA'};
-let deferredPrompt;
+const fields = [
+  'produto','cultura','area','propriedade','dataInicio','dataFim',
+  'latitude','longitude','municipio','precisao','vento','umidade','temperatura',
+  'receita','art','notaFiscal','serie','aplicador','cpf',
+  'assinaturaAplicador','assinaturaProdutor','observacoes'
+];
+const DEFAULTS = {
+  propriedade:'AGROPECUÁRIA PAINEIRA',
+  aplicador:'MARCIO GRIGOLETTO ESPINDOLA',
+  cpf:'976.068.470-53',
+  assinaturaAplicador:'MARCIO GRIGOLETTO ESPINDOLA'
+};
+const STORE='paineira_caderno_campo';
+let deferredPrompt=null;
 
-function dbLoad(){ try{return JSON.parse(localStorage.getItem('paineira_caderno_campo')||'[]')}catch{return []} }
-function dbSave(data){ localStorage.setItem('paineira_caderno_campo',JSON.stringify(data)); }
-function todayISO(){ return new Date().toISOString().slice(0,10); }
-function brDate(iso){ if(!iso)return ''; const [y,m,d]=iso.split('-'); return `${d}-${m}-${y}`; }
-function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
-function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
-function switchTab(name){ document.querySelectorAll('.panel').forEach(x=>x.classList.toggle('active',x.id===name)); document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===name)); if(name==='history')renderHistory(); }
+function dbLoad(){
+  try{return JSON.parse(localStorage.getItem(STORE)||'[]')}
+  catch{return []}
+}
+function dbSave(data){localStorage.setItem(STORE,JSON.stringify(data))}
+function localToday(){
+  const d=new Date();
+  const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function brDate(iso){
+  if(!iso)return '';
+  const p=iso.split('-');
+  return p.length===3?`${p[2]}-${p[1]}-${p[0]}`:iso;
+}
+function esc(s=''){
+  return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+}
+function toast(msg){
+  const t=$('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._timer); t._timer=setTimeout(()=>t.classList.remove('show'),2400);
+}
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
+  ['form','history','backup'].forEach(n=>$(n+'Panel').classList.toggle('active',n===name));
+  if(name==='history')renderHistory();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
 document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
 
-function resetForm(){ $('recordId').value=''; fields.forEach(f=>$(f).value=''); Object.entries(DEFAULTS).forEach(([k,v])=>$(k).value=v); $('dataInicio').value=todayISO(); $('gpsStatus').textContent='Latitude e longitude podem ser preenchidas automaticamente pelo GPS.'; }
-$('newBtn').addEventListener('click',()=>{resetForm(); window.scrollTo({top:0,behavior:'smooth'});});
+function resetForm(){
+  $('recordId').value='';
+  fields.forEach(f=>$(f).value='');
+  Object.entries(DEFAULTS).forEach(([k,v])=>$(k).value=v);
+  $('dataInicio').value=localToday();
+  $('gpsStatus').textContent='Toque em GPS para preencher a localização.';
+  $('editBanner').classList.add('hidden');
+  $('cancelBtn').classList.add('hidden');
+}
+$('newBtn').addEventListener('click',()=>{resetForm();switchTab('form')});
+$('historyNewBtn').addEventListener('click',()=>{resetForm();switchTab('form')});
+$('cancelBtn').addEventListener('click',()=>{resetForm();toast('Edição cancelada.')});
 
-$('cpf').addEventListener('input',e=>{let d=e.target.value.replace(/\D/g,'').slice(0,11); if(d.length>9)d=d.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/,'$1.$2.$3-$4'); else if(d.length>6)d=d.replace(/(\d{3})(\d{3})(\d+)/,'$1.$2.$3'); else if(d.length>3)d=d.replace(/(\d{3})(\d+)/,'$1.$2'); e.target.value=d;});
+$('cpf').addEventListener('input',e=>{
+  let d=e.target.value.replace(/\D/g,'').slice(0,11);
+  if(d.length>9)d=d.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/,'$1.$2.$3-$4');
+  else if(d.length>6)d=d.replace(/(\d{3})(\d{3})(\d+)/,'$1.$2.$3');
+  else if(d.length>3)d=d.replace(/(\d{3})(\d+)/,'$1.$2');
+  e.target.value=d;
+});
 
+async function municipioPorGPS(lat,lon){
+  try{
+    const url=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&zoom=10&addressdetails=1&accept-language=pt-BR`;
+    const r=await fetch(url,{headers:{Accept:'application/json'}});
+    if(!r.ok)throw new Error();
+    const d=await r.json(),a=d.address||{};
+    return a.city||a.town||a.municipality||a.village||a.city_district||a.county||'';
+  }catch{return ''}
+}
 $('gpsBtn').addEventListener('click',()=>{
-  if(!navigator.geolocation){ toast('GPS não disponível neste aparelho.'); return; }
+  if(!navigator.geolocation){toast('GPS indisponível.');return}
+  $('gpsBtn').disabled=true;
   $('gpsStatus').textContent='Obtendo localização...';
-  navigator.geolocation.getCurrentPosition(pos=>{
-    $('latitude').value=pos.coords.latitude.toFixed(6); $('longitude').value=pos.coords.longitude.toFixed(6); $('precisao').value=Math.round(pos.coords.accuracy);
-    $('gpsStatus').textContent=`Localização obtida. Precisão aproximada: ${Math.round(pos.coords.accuracy)} m.`; toast('Localização preenchida.');
-  },err=>{ $('gpsStatus').textContent='Não foi possível obter a localização. Verifique a permissão do GPS.'; toast('Localização não autorizada ou indisponível.'); },{enableHighAccuracy:true,timeout:15000,maximumAge:10000});
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    const lat=pos.coords.latitude.toFixed(6);
+    const lon=pos.coords.longitude.toFixed(6);
+    const acc=Math.round(pos.coords.accuracy);
+    $('latitude').value=lat;$('longitude').value=lon;$('precisao').value=acc;
+    $('gpsStatus').textContent='Identificando município...';
+    const mun=await municipioPorGPS(lat,lon);
+    if(mun)$('municipio').value=mun;
+    $('gpsStatus').textContent=mun?`Localização obtida • ${mun} • ±${acc} m`:`Localização obtida • ±${acc} m`;
+    $('gpsBtn').disabled=false;
+    toast(mun?'GPS e município preenchidos.':'GPS preenchido.');
+  },err=>{
+    $('gpsBtn').disabled=false;
+    let msg='Não foi possível obter o GPS.';
+    if(err.code===1)msg='Permita a localização para este site.';
+    else if(err.code===2)msg='Localização indisponível.';
+    else if(err.code===3)msg='GPS demorou para responder.';
+    $('gpsStatus').textContent=msg;toast(msg);
+  },{enableHighAccuracy:true,timeout:20000,maximumAge:5000});
 });
 
 $('appForm').addEventListener('submit',e=>{
   e.preventDefault();
-  const rec={}; fields.forEach(f=>rec[f]=$(f).value.trim());
-  rec.id=$('recordId').value || crypto.randomUUID(); rec.updatedAt=new Date().toISOString();
-  const data=dbLoad(); const idx=data.findIndex(x=>x.id===rec.id); if(idx>=0)data[idx]=rec; else data.unshift(rec); dbSave(data);
-  toast(idx>=0?'Aplicação atualizada.':'Aplicação salva.'); resetForm(); renderHistory(); switchTab('history');
+  const rec={};fields.forEach(f=>rec[f]=$(f).value.trim());
+  if(!rec.produto||!rec.cultura||!rec.propriedade||!rec.dataInicio||!rec.aplicador){
+    toast('Preencha os campos obrigatórios.');return;
+  }
+  const existingId=$('recordId').value;
+  rec.id=existingId||((crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now()));
+  rec.updatedAt=new Date().toISOString();
+  const data=dbLoad();
+  const idx=data.findIndex(x=>x.id===rec.id);
+  if(idx>=0)data[idx]=rec;else data.unshift(rec);
+  dbSave(data);
+  toast(existingId?'Alterações salvas.':'Aplicação salva.');
+  resetForm();renderHistory();
 });
 
-function renderHistory(){ const q=$('search').value.toLowerCase().trim(); const data=dbLoad().filter(r=>!q||Object.values(r).some(v=>String(v).toLowerCase().includes(q))); $('emptyHistory').style.display=data.length?'none':'block'; $('historyList').innerHTML=data.map(r=>`<article class="history-item"><h3>${esc(r.produto||'Sem produto')} — ${esc(r.cultura||'')}</h3><div class="meta"><strong>Data:</strong> ${brDate(r.dataInicio)} &nbsp; <strong>Área:</strong> ${esc(r.area||'-')} ha<br><strong>Propriedade:</strong> ${esc(r.propriedade||'-')}<br><strong>Local:</strong> ${esc(r.municipio||'-')} ${r.latitude?`(${esc(r.latitude)}, ${esc(r.longitude)})`:''}</div><div class="actions"><button class="secondary" onclick="editRecord('${r.id}')">Editar</button><button class="secondary" onclick="printRecord('${r.id}')">Imprimir</button><button class="danger" onclick="deleteRecord('${r.id}')">Excluir</button></div></article>`).join(''); }
+function renderHistory(){
+  const q=$('search').value.trim().toLowerCase();
+  const all=dbLoad().sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||''));
+  const data=all.filter(r=>!q||[r.produto,r.cultura,r.propriedade,r.municipio,r.aplicador].join(' ').toLowerCase().includes(q));
+  $('historyCount').textContent=`${data.length} ${data.length===1?'registro':'registros'}`;
+  $('emptyHistory').style.display=data.length?'none':'block';
+  $('historyList').innerHTML=data.map(r=>`
+    <article class="history-item">
+      <h3>${esc(r.produto||'Sem produto')} — ${esc(r.cultura||'')}</h3>
+      <div class="meta">
+        <strong>Data:</strong> ${brDate(r.dataInicio)||'-'} &nbsp; <strong>Área:</strong> ${esc(r.area||'-')} ha<br>
+        <strong>Propriedade:</strong> ${esc(r.propriedade||'-')}<br>
+        <strong>Local:</strong> ${esc(r.municipio||'-')}${r.latitude?` • ${esc(r.latitude)}, ${esc(r.longitude)}`:''}
+      </div>
+      <div class="item-actions">
+        <button class="secondary" onclick="editRecord('${r.id}')">Editar</button>
+        <button class="secondary" onclick="printRecord('${r.id}')">Imprimir</button>
+        <button class="danger" onclick="deleteRecord('${r.id}')">Excluir</button>
+      </div>
+    </article>`).join('');
+}
 $('search').addEventListener('input',renderHistory);
 
-window.editRecord=id=>{ const r=dbLoad().find(x=>x.id===id); if(!r)return; $('recordId').value=id; fields.forEach(f=>$(f).value=r[f]||''); switchTab('form'); window.scrollTo({top:0,behavior:'smooth'}); };
-window.deleteRecord=id=>{ if(!confirm('Excluir esta aplicação?'))return; dbSave(dbLoad().filter(x=>x.id!==id)); renderHistory(); toast('Aplicação excluída.'); };
-window.printRecord=id=>{ const r=dbLoad().find(x=>x.id===id); if(!r)return; const w=open('','_blank'); w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Aplicação ${brDate(r.dataInicio)}</title><style>body{font-family:Arial;margin:28px;color:#222}h1{text-align:center;font-size:20px;margin-bottom:2px}h2{text-align:center;font-size:14px;font-weight:normal;margin-top:0}.sec{margin-top:18px;border-top:1px solid #999;padding-top:8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px}.f{font-size:13px}.f b{display:block;font-size:11px;color:#555}.sign{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:70px;text-align:center}.line{border-top:1px solid #333;padding-top:5px}@media print{button{display:none}}</style></head><body><h1>AGROPECUÁRIA PAINEIRA</h1><h2>CADERNO DE CAMPO — REGISTRO DE APLICAÇÃO</h2><div class="sec grid"><div class="f"><b>Produto aplicado</b>${esc(r.produto)}</div><div class="f"><b>Cultura tratada</b>${esc(r.cultura)}</div><div class="f"><b>Área tratada (ha)</b>${esc(r.area)}</div><div class="f"><b>Propriedade</b>${esc(r.propriedade)}</div><div class="f"><b>Data de início</b>${brDate(r.dataInicio)}</div><div class="f"><b>Data final</b>${brDate(r.dataFim)}</div></div><div class="sec grid"><div class="f"><b>Latitude</b>${esc(r.latitude)}</div><div class="f"><b>Longitude</b>${esc(r.longitude)}</div><div class="f"><b>Município</b>${esc(r.municipio)}</div><div class="f"><b>Precisão GPS</b>${esc(r.precisao)} m</div><div class="f"><b>Vento (km/h)</b>${esc(r.vento)}</div><div class="f"><b>Umidade (%)</b>${esc(r.umidade)}</div><div class="f"><b>Temperatura (°C)</b>${esc(r.temperatura)}</div></div><div class="sec grid"><div class="f"><b>Nº receita agronômica</b>${esc(r.receita)}</div><div class="f"><b>Nº ART</b>${esc(r.art)}</div><div class="f"><b>Nota fiscal</b>${esc(r.notaFiscal)} ${r.serie?`— Série ${esc(r.serie)}`:''}</div><div class="f"><b>Aplicador</b>${esc(r.aplicador)} — CPF ${esc(r.cpf)}</div></div><div class="sec"><div class="f"><b>Observações</b>${esc(r.observacoes).replace(/\n/g,'<br>')}</div></div><div class="sign"><div class="line">${esc(r.assinaturaAplicador||r.aplicador)}<br>Assinatura do aplicador</div><div class="line">${esc(r.assinaturaProdutor)}<br>Produtor / representante legal</div></div><script>window.onload=()=>window.print()<\/script></body></html>`); w.document.close(); };
+window.editRecord=id=>{
+  const r=dbLoad().find(x=>x.id===id);if(!r)return;
+  $('recordId').value=id;fields.forEach(f=>$(f).value=r[f]||'');
+  $('editBanner').classList.remove('hidden');$('cancelBtn').classList.remove('hidden');
+  switchTab('form');
+};
+window.deleteRecord=id=>{
+  const r=dbLoad().find(x=>x.id===id);if(!r)return;
+  if(!confirm(`Excluir a aplicação de ${r.produto||'produto'} em ${brDate(r.dataInicio)||'data não informada'}?`))return;
+  dbSave(dbLoad().filter(x=>x.id!==id));renderHistory();toast('Aplicação excluída.');
+};
 
-$('exportBtn').addEventListener('click',()=>{ const blob=new Blob([JSON.stringify({app:'Caderno de Campo Paineira',version:1,exportedAt:new Date().toISOString(),records:dbLoad()},null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`caderno-campo-backup-${todayISO()}.json`; a.click(); URL.revokeObjectURL(a.href); });
-$('importFile').addEventListener('change',async e=>{ const f=e.target.files[0]; if(!f)return; try{const obj=JSON.parse(await f.text()); const records=Array.isArray(obj)?obj:obj.records; if(!Array.isArray(records))throw 0; if(!confirm(`Importar ${records.length} registro(s) e substituir os dados atuais?`))return; dbSave(records); renderHistory(); toast('Backup importado.');}catch{alert('Arquivo de backup inválido.')} e.target.value=''; });
+function printHtml(r){
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Aplicação ${brDate(r.dataInicio)}</title>
+  <style>
+    @page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#222;margin:0;font-size:12px}
+    .head{display:grid;grid-template-columns:85px 1fr;align-items:center;border-bottom:2px solid #215b34;padding-bottom:9px;margin-bottom:12px}
+    .head img{width:74px;height:74px;object-fit:cover;border-radius:50%}.head h1{margin:0;color:#215b34;font-size:20px}.head p{margin:3px 0 0;font-size:12px}
+    .title{text-align:center;font-weight:bold;font-size:14px;margin:10px 0}.sec{border:1px solid #cfd8d1;border-radius:7px;padding:9px;margin-top:8px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 18px}.f b{display:block;color:#526057;font-size:10px;text-transform:uppercase;margin-bottom:2px}
+    .obs{min-height:45px}.sign{display:grid;grid-template-columns:1fr 1fr;gap:45px;margin-top:55px;text-align:center}.line{border-top:1px solid #333;padding-top:5px}
+    .actions{margin:12px 0;text-align:center}.actions button{padding:9px 16px;border:0;border-radius:6px;background:#215b34;color:#fff;font-weight:bold}
+    @media print{.actions{display:none}}
+  </style></head><body>
+  <div class="head"><img src="./assets/logo-paineira.png"><div><h1>AGROPECUÁRIA PAINEIRA</h1><p>Caderno de Campo</p></div></div>
+  <div class="title">REGISTRO DE APLICAÇÃO</div>
+  <div class="sec grid">
+    <div class="f"><b>Produto aplicado</b>${esc(r.produto)}</div><div class="f"><b>Cultura tratada</b>${esc(r.cultura)}</div>
+    <div class="f"><b>Área tratada (ha)</b>${esc(r.area)}</div><div class="f"><b>Propriedade</b>${esc(r.propriedade)}</div>
+    <div class="f"><b>Data de início</b>${brDate(r.dataInicio)}</div><div class="f"><b>Data final</b>${brDate(r.dataFim)}</div>
+  </div>
+  <div class="sec grid">
+    <div class="f"><b>Latitude</b>${esc(r.latitude)}</div><div class="f"><b>Longitude</b>${esc(r.longitude)}</div>
+    <div class="f"><b>Município</b>${esc(r.municipio)}</div><div class="f"><b>Precisão GPS</b>${esc(r.precisao)}${r.precisao?' m':''}</div>
+    <div class="f"><b>Vento (km/h)</b>${esc(r.vento)}</div><div class="f"><b>Umidade (%)</b>${esc(r.umidade)}</div>
+    <div class="f"><b>Temperatura (°C)</b>${esc(r.temperatura)}</div>
+  </div>
+  <div class="sec grid">
+    <div class="f"><b>Receita agronômica</b>${esc(r.receita)}</div><div class="f"><b>ART</b>${esc(r.art)}</div>
+    <div class="f"><b>Nota fiscal</b>${esc(r.notaFiscal)}</div><div class="f"><b>Série</b>${esc(r.serie)}</div>
+    <div class="f"><b>Aplicador</b>${esc(r.aplicador)}</div><div class="f"><b>CPF</b>${esc(r.cpf)}</div>
+  </div>
+  <div class="sec obs"><div class="f"><b>Observações</b>${esc(r.observacoes).replace(/\n/g,'<br>')}</div></div>
+  <div class="sign"><div class="line">${esc(r.assinaturaAplicador||r.aplicador)}<br>Assinatura do aplicador</div>
+  <div class="line">${esc(r.assinaturaProdutor)}<br>Produtor / representante legal</div></div>
+  <div class="actions"><button onclick="window.print()">Imprimir</button></div>
+  </body></html>`;
+}
+window.printRecord=id=>{
+  const r=dbLoad().find(x=>x.id===id);if(!r)return;
+  const w=window.open('','_blank');
+  if(!w){toast('Permita abrir a ficha para imprimir.');return}
+  w.document.open();w.document.write(printHtml(r));w.document.close();
+};
 
-window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); deferredPrompt=e; $('installBtn').classList.remove('hidden');});
-$('installBtn').addEventListener('click',async()=>{if(!deferredPrompt)return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null; $('installBtn').classList.add('hidden');});
-if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
-resetForm(); renderHistory();
+$('exportBtn').addEventListener('click',()=>{
+  const blob=new Blob([JSON.stringify(dbLoad(),null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`caderno-campo-backup-${localToday()}.json`;a.click();URL.revokeObjectURL(a.href);
+  toast('Backup exportado.');
+});
+$('importFile').addEventListener('change',async e=>{
+  const file=e.target.files[0];if(!file)return;
+  try{
+    const data=JSON.parse(await file.text());
+    if(!Array.isArray(data))throw new Error();
+    if(!confirm(`Importar ${data.length} registros? Os atuais serão substituídos.`))return;
+    dbSave(data);renderHistory();toast('Backup importado.');
+  }catch{toast('Arquivo de backup inválido.')}
+  e.target.value='';
+});
+$('clearBtn').addEventListener('click',()=>{
+  if(!confirm('Apagar todos os registros deste aparelho?'))return;
+  if(!confirm('Confirma a exclusão total?'))return;
+  dbSave([]);renderHistory();toast('Registros apagados.');
+});
+
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();deferredPrompt=e;$('installBtn').classList.remove('hidden');
+});
+$('installBtn').addEventListener('click',async()=>{
+  if(!deferredPrompt){toast('Use Adicionar à Tela de Início no navegador.');return}
+  deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;$('installBtn').classList.add('hidden');
+});
+window.addEventListener('appinstalled',()=>{$('installBtn').classList.add('hidden');toast('Aplicativo instalado.')});
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+
+resetForm();renderHistory();
