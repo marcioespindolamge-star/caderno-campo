@@ -1,0 +1,18 @@
+CADERNO DE CAMPO — PACOTE PARA GITHUB PAGES
+
+1. Crie um repositório público chamado: caderno-campo
+2. Envie TODOS os arquivos desta pasta para a raiz do repositório.
+3. No repositório, abra Settings > Pages.
+4. Em Build and deployment, escolha Deploy from a branch.
+5. Branch: main | Folder: /(root)
+6. Clique Save.
+7. O endereço ficará no formato:
+   https://SEU-USUARIO.github.io/caderno-campo/
+8. Abra esse endereço no celular.
+9. Autorize o acesso à localização quando o sistema solicitar.
+10. No navegador, use "Adicionar à tela inicial" / "Instalar aplicativo".
+
+IMPORTANTE:
+- No GitHub Free, use repositório público para GitHub Pages.
+- Os registros do Caderno de Campo ficam armazenados no próprio navegador/aparelho.
+- Faça backup periódico pelo próprio sistema.

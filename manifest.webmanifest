@@ -1,0 +1,9 @@
+{
+  "name":"Caderno de Campo — Agropecuária Paineira",
+  "short_name":"Caderno Campo",
+  "start_url":"./",
+  "display":"standalone",
+  "background_color":"#eef2ed",
+  "theme_color":"#2f6d3a",
+  "icons":[{"src":"icons/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}

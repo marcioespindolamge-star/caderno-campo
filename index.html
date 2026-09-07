@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#2f6d3a" />
+  <title>Caderno de Campo — Agropecuária Paineira</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="app-header">
+  <div>
+    <h1>Caderno de Campo</h1>
+    <p>Agropecuária Paineira</p>
+  </div>
+  <button id="installBtn" class="ghost hidden">Instalar</button>
+</header>
+
+<nav class="tabs" aria-label="Navegação principal">
+  <button class="tab active" data-tab="form">Nova aplicação</button>
+  <button class="tab" data-tab="history">Histórico</button>
+  <button class="tab" data-tab="backup">Backup</button>
+</nav>
+
+<main>
+  <section id="form" class="panel active">
+    <form id="appForm" autocomplete="off">
+      <input type="hidden" id="recordId" />
+
+      <div class="card">
+        <h2>Aplicação</h2>
+        <div class="grid two">
+          <label>Produto aplicado *<input id="produto" required placeholder="Ex.: Herbicida" /></label>
+          <label>Cultura tratada *<input id="cultura" required placeholder="Ex.: Soja" /></label>
+          <label>Área tratada (ha)<input id="area" inputmode="decimal" placeholder="0,00" /></label>
+          <label>Propriedade aplicada *<input id="propriedade" required value="AGROPECUÁRIA PAINEIRA" /></label>
+        </div>
+        <div class="grid two">
+          <label>Data de início *<input id="dataInicio" type="date" required /></label>
+          <label>Data final<input id="dataFim" type="date" /></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Localização</h2>
+        <button type="button" id="gpsBtn" class="primary full">📍 Usar localização do celular</button>
+        <p id="gpsStatus" class="hint">Latitude e longitude podem ser preenchidas automaticamente pelo GPS.</p>
+        <div class="grid two">
+          <label>Latitude<input id="latitude" inputmode="decimal" placeholder="-29.000000" /></label>
+          <label>Longitude<input id="longitude" inputmode="decimal" placeholder="-53.000000" /></label>
+          <label>Município<input id="municipio" placeholder="Município" /></label>
+          <label>Precisão do GPS (m)<input id="precisao" readonly /></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Condições meteorológicas</h2>
+        <div class="grid three">
+          <label>Vento (km/h)<input id="vento" inputmode="decimal" /></label>
+          <label>Umidade (%)<input id="umidade" inputmode="decimal" /></label>
+          <label>Temperatura (°C)<input id="temperatura" inputmode="decimal" /></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Documentação</h2>
+        <div class="grid two">
+          <label>Nº receita agronômica<input id="receita" /></label>
+          <label>Nº ART<input id="art" /></label>
+          <label>Nº nota fiscal<input id="notaFiscal" /></label>
+          <label>Série<input id="serie" /></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Responsáveis</h2>
+        <div class="grid two">
+          <label>Nome do aplicador *<input id="aplicador" required value="MARCIO GRIGOLETTO ESPINDOLA" /></label>
+          <label>CPF do aplicador<input id="cpf" value="976.068.470-53" /></label>
+          <label>Assinatura / nome do aplicador<input id="assinaturaAplicador" value="MARCIO GRIGOLETTO ESPINDOLA" /></label>
+          <label>Produtor / representante legal<input id="assinaturaProdutor" /></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Observações</h2>
+        <textarea id="observacoes" rows="4" placeholder="Informações adicionais"></textarea>
+      </div>
+
+      <div class="sticky-actions">
+        <button type="button" id="newBtn" class="secondary">Novo</button>
+        <button type="submit" class="primary">Salvar aplicação</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="history" class="panel">
+    <div class="card">
+      <div class="history-head">
+        <h2>Aplicações realizadas</h2>
+        <input id="search" placeholder="Pesquisar produto, cultura, propriedade..." />
+      </div>
+      <div id="historyList" class="history-list"></div>
+      <p id="emptyHistory" class="empty">Nenhuma aplicação cadastrada.</p>
+    </div>
+  </section>
+
+  <section id="backup" class="panel">
+    <div class="card">
+      <h2>Backup dos dados</h2>
+      <p>Os registros ficam salvos neste aparelho. Exporte um backup regularmente.</p>
+      <div class="stack">
+        <button id="exportBtn" class="primary">Exportar backup</button>
+        <label class="file-btn">Importar backup<input id="importFile" type="file" accept="application/json" hidden /></label>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Instalação no celular</h2>
+      <p>Abra esta página em um endereço HTTPS e escolha <strong>Instalar aplicativo</strong> ou <strong>Adicionar à tela inicial</strong>. Depois de instalada, a versão funciona offline.</p>
+      <p class="hint">O GPS do navegador exige um endereço seguro (HTTPS) e sua autorização de localização.</p>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast" role="status"></div>
+<script src="app.js"></script>
+</body>
+</html>
