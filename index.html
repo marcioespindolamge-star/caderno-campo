@@ -45,16 +45,18 @@
           <h2>Aplicação</h2>
           <div class="grid two">
             <label>Produto *
-              <input id="produto" required>
+              <input id="produto" list="produtoList" required autocapitalize="characters">
+              <datalist id="produtoList"></datalist>
             </label>
             <label>Cultura *
-              <input id="cultura" required>
+              <input id="cultura" list="culturaList" required autocapitalize="characters">
+              <datalist id="culturaList"></datalist>
             </label>
             <label>Área (ha)
               <input id="area" inputmode="decimal">
             </label>
             <label>Propriedade *
-              <input id="propriedade" required>
+              <input id="propriedade" autocapitalize="characters" required>
             </label>
           </div>
         </div>
@@ -81,13 +83,13 @@
           <div id="gpsStatus" class="status">Toque em GPS para preencher a localização.</div>
           <div class="grid two">
             <label>Latitude
-              <input id="latitude" inputmode="decimal">
+              <input id="latitude" type="text" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="-29.765477">
             </label>
             <label>Longitude
-              <input id="longitude" inputmode="decimal">
+              <input id="longitude" type="text" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="-53.500914">
             </label>
             <label>Município
-              <input id="municipio">
+              <input id="municipio" readonly>
             </label>
             <label>Precisão (m)
               <input id="precisao" inputmode="numeric">
@@ -98,14 +100,14 @@
         <div class="card">
           <h2>Clima</h2>
           <div class="grid three">
-            <label>Vento (km/h)
-              <input id="vento" inputmode="decimal">
+            <label>Vento
+              <div class="unit-input"><input id="vento" inputmode="decimal"><span>km/h</span></div>
             </label>
             <label>Umidade (%)
               <input id="umidade" inputmode="decimal">
             </label>
-            <label>Temperatura (°C)
-              <input id="temperatura" inputmode="decimal">
+            <label>Temperatura
+              <div class="unit-input"><input id="temperatura" inputmode="decimal"><span>°C</span></div>
             </label>
           </div>
         </div>
@@ -114,16 +116,16 @@
           <h2>Documentos</h2>
           <div class="grid two">
             <label>Receita
-              <input id="receita">
+              <input id="receita" autocapitalize="characters">
             </label>
             <label>ART
-              <input id="art">
+              <input id="art" autocapitalize="characters">
             </label>
             <label>Nota fiscal
-              <input id="notaFiscal">
+              <input id="notaFiscal" autocapitalize="characters">
             </label>
             <label>Série
-              <input id="serie">
+              <input id="serie" autocapitalize="characters">
             </label>
           </div>
         </div>
@@ -132,29 +134,29 @@
           <h2>Responsáveis</h2>
           <div class="grid two">
             <label>Aplicador *
-              <input id="aplicador" required>
+              <input id="aplicador" autocapitalize="characters" required>
             </label>
             <label>CPF
               <input id="cpf" inputmode="numeric">
             </label>
             <label>Assinatura aplicador
-              <input id="assinaturaAplicador">
+              <input id="assinaturaAplicador" autocapitalize="characters">
             </label>
             <label>Produtor
-              <input id="assinaturaProdutor">
+              <input id="assinaturaProdutor" autocapitalize="characters">
             </label>
           </div>
         </div>
 
         <div class="card">
           <h2>Observações</h2>
-          <textarea id="observacoes" rows="4"></textarea>
+          <textarea id="observacoes" rows="4" autocapitalize="characters"></textarea>
         </div>
 
         <div class="actionbar">
           <button id="newBtn" type="button" class="secondary">Novo</button>
-          <button id="cancelBtn" type="button" class="secondary hidden">Cancelar</button>
           <button type="submit" class="primary">Salvar</button>
+          <button id="cancelBtn" type="button" class="secondary">Cancelar</button>
         </div>
       </form>
     </section>
