@@ -39,6 +39,12 @@ input,textarea{
   padding:10px 11px;outline:none;min-height:42px
 }
 textarea{resize:vertical}
+.unit-input{position:relative;margin-top:5px}
+.unit-input input{margin-top:0;padding-right:58px}
+.unit-input span{position:absolute;right:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.82rem;font-weight:800;pointer-events:none}
+input[readonly]{background:#f4f7f4;color:#34483a;font-weight:800}
+#produto,#cultura,#municipio{text-transform:uppercase}
+
 input:focus,textarea:focus{border-color:#7eaa8d;box-shadow:0 0 0 3px rgba(47,116,71,.10)}
 .status{font-size:.78rem;color:var(--muted);background:#f4f8f5;border-radius:9px;padding:8px 10px;margin-bottom:10px}
 button,.file-button{
@@ -80,8 +86,8 @@ button,.file-button{
   .topbar{min-height:70px;padding-top:8px;padding-bottom:8px}.tabs{top:70px}
   .brand-logo{width:50px;height:50px}.brand h1{font-size:1rem}.brand p{font-size:.7rem}
   main{padding:9px}.card{padding:12px;border-radius:12px;margin-bottom:8px}
-  .grid.two,.grid.three{grid-template-columns:1fr 1fr}
-  .grid.three label:last-child{grid-column:1/-1}
+  .grid.two,.grid.three{grid-template-columns:1fr}
+  .grid.three label:last-child{grid-column:auto}
   input,textarea{min-height:40px;padding:9px 10px}
 }
 @media (max-width:390px){
