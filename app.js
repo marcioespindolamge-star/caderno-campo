@@ -5,13 +5,21 @@ const fields = [
   'receita','art','notaFiscal','serie','aplicador','cpf',
   'assinaturaAplicador','assinaturaProdutor','observacoes'
 ];
+const UPPERCASE_FIELDS = [
+  'produto','cultura','propriedade','receita','art','notaFiscal','serie',
+  'aplicador','assinaturaAplicador','assinaturaProdutor','observacoes'
+];
 const DEFAULTS = {
   propriedade:'AGROPECUÁRIA PAINEIRA',
+  municipio:'RESTINGA SÊCA - RS',
   aplicador:'MARCIO GRIGOLETTO ESPINDOLA',
   cpf:'976.068.470-53',
-  assinaturaAplicador:'MARCIO GRIGOLETTO ESPINDOLA'
+  assinaturaAplicador:'MARCIO GRIGOLETTO ESPINDOLA',
+  observacoes:'CERTIFICADO DE APLICADOR DE AGROTÓXICO VÁLIDO ATÉ 30/06/2030'
 };
 const STORE='paineira_caderno_campo';
+const SAVED_OPTIONS_STORE='paineira_caderno_opcoes';
+const LAST_USED_STORE='paineira_caderno_ultimo';
 let deferredPrompt=null;
 
 function dbLoad(){
@@ -19,6 +27,51 @@ function dbLoad(){
   catch{return []}
 }
 function dbSave(data){localStorage.setItem(STORE,JSON.stringify(data))}
+function optionsLoad(){
+  try{
+    const o=JSON.parse(localStorage.getItem(SAVED_OPTIONS_STORE)||'{}');
+    return {produtos:Array.isArray(o.produtos)?o.produtos:[],culturas:Array.isArray(o.culturas)?o.culturas:[]};
+  }catch{return {produtos:[],culturas:[]}}
+}
+function optionsSave(o){localStorage.setItem(SAVED_OPTIONS_STORE,JSON.stringify(o))}
+function lastUsedLoad(){
+  try{return JSON.parse(localStorage.getItem(LAST_USED_STORE)||'{}')}
+  catch{return {}}
+}
+function lastUsedSave(rec){
+  localStorage.setItem(LAST_USED_STORE,JSON.stringify({produto:rec.produto||'',cultura:rec.cultura||''}));
+}
+function normalizeUpper(value){return String(value||'').trim().toLocaleUpperCase('pt-BR')}
+function rememberReusable(rec){
+  const o=optionsLoad();
+  if(rec.produto && !o.produtos.includes(rec.produto))o.produtos.push(rec.produto);
+  if(rec.cultura && !o.culturas.includes(rec.cultura))o.culturas.push(rec.cultura);
+  o.produtos.sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  o.culturas.sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  optionsSave(o);lastUsedSave(rec);renderReusableOptions();
+}
+function renderReusableOptions(){
+  const o=optionsLoad();
+  $('produtoList').innerHTML=o.produtos.map(v=>`<option value="${esc(v)}"></option>`).join('');
+  $('culturaList').innerHTML=o.culturas.map(v=>`<option value="${esc(v)}"></option>`).join('');
+}
+function bootstrapReusableOptions(){
+  const data=dbLoad();
+  if(!data.length)return;
+  const o=optionsLoad();
+  data.forEach(r=>{
+    const p=normalizeUpper(r.produto),c=normalizeUpper(r.cultura);
+    if(p&&!o.produtos.includes(p))o.produtos.push(p);
+    if(c&&!o.culturas.includes(c))o.culturas.push(c);
+  });
+  o.produtos.sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  o.culturas.sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  optionsSave(o);
+  if(!localStorage.getItem(LAST_USED_STORE)){
+    const latest=[...data].sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||''))[0];
+    if(latest)lastUsedSave({produto:normalizeUpper(latest.produto),cultura:normalizeUpper(latest.cultura)});
+  }
+}
 function localToday(){
   const d=new Date();
   const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
@@ -44,18 +97,35 @@ function switchTab(name){
 }
 document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
 
-function resetForm(){
+function resetForm({keepReusable=true}={}){
+  const last=keepReusable?lastUsedLoad():{};
   $('recordId').value='';
   fields.forEach(f=>$(f).value='');
   Object.entries(DEFAULTS).forEach(([k,v])=>$(k).value=v);
+  if(keepReusable){
+    if(last.produto)$('produto').value=last.produto;
+    if(last.cultura)$('cultura').value=last.cultura;
+  }
   $('dataInicio').value=localToday();
-  $('gpsStatus').textContent='Toque em GPS para preencher a localização.';
+  $('gpsStatus').textContent='Toque em GPS para preencher latitude, longitude e precisão.';
   $('editBanner').classList.add('hidden');
-  $('cancelBtn').classList.add('hidden');
 }
 $('newBtn').addEventListener('click',()=>{resetForm();switchTab('form')});
 $('historyNewBtn').addEventListener('click',()=>{resetForm();switchTab('form')});
-$('cancelBtn').addEventListener('click',()=>{resetForm();toast('Edição cancelada.')});
+$('cancelBtn').addEventListener('click',()=>{
+  const editing=Boolean($('recordId').value);
+  resetForm();
+  toast(editing?'Edição cancelada.':'Aplicação cancelada.');
+});
+
+UPPERCASE_FIELDS.forEach(id=>{
+  $(id).addEventListener('input',e=>{
+    const start=e.target.selectionStart,end=e.target.selectionEnd;
+    e.target.value=e.target.value.toLocaleUpperCase('pt-BR');
+    try{e.target.setSelectionRange(start,end)}catch{}
+  });
+  $(id).addEventListener('blur',e=>e.target.value=normalizeUpper(e.target.value));
+});
 
 $('cpf').addEventListener('input',e=>{
   let d=e.target.value.replace(/\D/g,'').slice(0,11);
@@ -65,30 +135,34 @@ $('cpf').addEventListener('input',e=>{
   e.target.value=d;
 });
 
-async function municipioPorGPS(lat,lon){
-  try{
-    const url=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&zoom=10&addressdetails=1&accept-language=pt-BR`;
-    const r=await fetch(url,{headers:{Accept:'application/json'}});
-    if(!r.ok)throw new Error();
-    const d=await r.json(),a=d.address||{};
-    return a.city||a.town||a.municipality||a.village||a.city_district||a.county||'';
-  }catch{return ''}
+function normalizeCoordinate(value){
+  return String(value||'').trim().replace(',', '.').replace(/[^0-9+\-.]/g,'');
 }
+['latitude','longitude'].forEach(id=>{
+  $(id).addEventListener('blur',e=>{
+    const v=normalizeCoordinate(e.target.value);
+    if(!v){e.target.value='';return}
+    if(!/^[+-]?\d+(?:\.\d+)?$/.test(v)){
+      toast('Use coordenadas como -29.765477.');
+      return;
+    }
+    e.target.value=v;
+  });
+});
+
 $('gpsBtn').addEventListener('click',()=>{
   if(!navigator.geolocation){toast('GPS indisponível.');return}
   $('gpsBtn').disabled=true;
   $('gpsStatus').textContent='Obtendo localização...';
-  navigator.geolocation.getCurrentPosition(async pos=>{
+  navigator.geolocation.getCurrentPosition(pos=>{
     const lat=pos.coords.latitude.toFixed(6);
     const lon=pos.coords.longitude.toFixed(6);
     const acc=Math.round(pos.coords.accuracy);
     $('latitude').value=lat;$('longitude').value=lon;$('precisao').value=acc;
-    $('gpsStatus').textContent='Identificando município...';
-    const mun=await municipioPorGPS(lat,lon);
-    if(mun)$('municipio').value=mun;
-    $('gpsStatus').textContent=mun?`Localização obtida • ${mun} • ±${acc} m`:`Localização obtida • ±${acc} m`;
+    $('municipio').value=DEFAULTS.municipio;
+    $('gpsStatus').textContent=`Localização obtida • ±${acc} m`;
     $('gpsBtn').disabled=false;
-    toast(mun?'GPS e município preenchidos.':'GPS preenchido.');
+    toast('GPS preenchido.');
   },err=>{
     $('gpsBtn').disabled=false;
     let msg='Não foi possível obter o GPS.';
@@ -102,16 +176,22 @@ $('gpsBtn').addEventListener('click',()=>{
 $('appForm').addEventListener('submit',e=>{
   e.preventDefault();
   const rec={};fields.forEach(f=>rec[f]=$(f).value.trim());
+  UPPERCASE_FIELDS.forEach(f=>rec[f]=normalizeUpper(rec[f]));
+  rec.latitude=normalizeCoordinate(rec.latitude);
+  rec.longitude=normalizeCoordinate(rec.longitude);
+  if(rec.latitude && !/^[+-]?\d+(?:\.\d+)?$/.test(rec.latitude)){toast('Latitude inválida. Exemplo: -29.765477');return;}
+  if(rec.longitude && !/^[+-]?\d+(?:\.\d+)?$/.test(rec.longitude)){toast('Longitude inválida. Exemplo: -53.500914');return;}
+  rec.municipio=DEFAULTS.municipio;
   if(!rec.produto||!rec.cultura||!rec.propriedade||!rec.dataInicio||!rec.aplicador){
     toast('Preencha os campos obrigatórios.');return;
   }
   const existingId=$('recordId').value;
-  rec.id=existingId||((crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now()));
+  rec.id=existingId||((globalThis.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now()));
   rec.updatedAt=new Date().toISOString();
   const data=dbLoad();
   const idx=data.findIndex(x=>x.id===rec.id);
   if(idx>=0)data[idx]=rec;else data.unshift(rec);
-  dbSave(data);
+  dbSave(data);rememberReusable(rec);
   toast(existingId?'Alterações salvas.':'Aplicação salva.');
   resetForm();renderHistory();
 });
@@ -142,6 +222,7 @@ $('search').addEventListener('input',renderHistory);
 window.editRecord=id=>{
   const r=dbLoad().find(x=>x.id===id);if(!r)return;
   $('recordId').value=id;fields.forEach(f=>$(f).value=r[f]||'');
+  $('municipio').value=DEFAULTS.municipio;
   $('editBanner').classList.remove('hidden');$('cancelBtn').classList.remove('hidden');
   switchTab('form');
 };
@@ -152,6 +233,8 @@ window.deleteRecord=id=>{
 };
 
 function printHtml(r){
+  const vento = r.vento ? `${esc(r.vento)} km/h` : '';
+  const temperatura = r.temperatura ? `${esc(r.temperatura)} °C` : '';
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Aplicação ${brDate(r.dataInicio)}</title>
   <style>
@@ -161,7 +244,8 @@ function printHtml(r){
     .title{text-align:center;font-weight:bold;font-size:14px;margin:10px 0}.sec{border:1px solid #cfd8d1;border-radius:7px;padding:9px;margin-top:8px}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 18px}.f b{display:block;color:#526057;font-size:10px;text-transform:uppercase;margin-bottom:2px}
     .obs{min-height:45px}.sign{display:grid;grid-template-columns:1fr 1fr;gap:45px;margin-top:55px;text-align:center}.line{border-top:1px solid #333;padding-top:5px}
-    .actions{margin:12px 0;text-align:center}.actions button{padding:9px 16px;border:0;border-radius:6px;background:#215b34;color:#fff;font-weight:bold}
+    .actions{display:flex;gap:10px;justify-content:center;margin:16px 0}.actions button{padding:10px 18px;border:0;border-radius:7px;font-weight:bold;cursor:pointer}
+    .print{background:#215b34;color:#fff}.back{background:#edf3ef;color:#215b34;border:1px solid #cfd8d1!important}
     @media print{.actions{display:none}}
   </style></head><body>
   <div class="head"><img src="./assets/logo-paineira.png"><div><h1>AGROPECUÁRIA PAINEIRA</h1><p>Caderno de Campo</p></div></div>
@@ -173,9 +257,9 @@ function printHtml(r){
   </div>
   <div class="sec grid">
     <div class="f"><b>Latitude</b>${esc(r.latitude)}</div><div class="f"><b>Longitude</b>${esc(r.longitude)}</div>
-    <div class="f"><b>Município</b>${esc(r.municipio)}</div><div class="f"><b>Precisão GPS</b>${esc(r.precisao)}${r.precisao?' m':''}</div>
-    <div class="f"><b>Vento (km/h)</b>${esc(r.vento)}</div><div class="f"><b>Umidade (%)</b>${esc(r.umidade)}</div>
-    <div class="f"><b>Temperatura (°C)</b>${esc(r.temperatura)}</div>
+    <div class="f"><b>Município</b>${esc(r.municipio||DEFAULTS.municipio)}</div><div class="f"><b>Precisão GPS</b>${esc(r.precisao)}${r.precisao?' m':''}</div>
+    <div class="f"><b>Vento</b>${vento}</div><div class="f"><b>Umidade (%)</b>${esc(r.umidade)}</div>
+    <div class="f"><b>Temperatura</b>${temperatura}</div>
   </div>
   <div class="sec grid">
     <div class="f"><b>Receita agronômica</b>${esc(r.receita)}</div><div class="f"><b>ART</b>${esc(r.art)}</div>
@@ -185,7 +269,7 @@ function printHtml(r){
   <div class="sec obs"><div class="f"><b>Observações</b>${esc(r.observacoes).replace(/\n/g,'<br>')}</div></div>
   <div class="sign"><div class="line">${esc(r.assinaturaAplicador||r.aplicador)}<br>Assinatura do aplicador</div>
   <div class="line">${esc(r.assinaturaProdutor)}<br>Produtor / representante legal</div></div>
-  <div class="actions"><button onclick="window.print()">Imprimir</button></div>
+  <div class="actions"><button class="back" onclick="if(window.opener){window.close()}else{history.back()}">Voltar</button><button class="print" onclick="window.print()">Imprimir</button></div>
   </body></html>`;
 }
 window.printRecord=id=>{
@@ -207,7 +291,14 @@ $('importFile').addEventListener('change',async e=>{
     const data=JSON.parse(await file.text());
     if(!Array.isArray(data))throw new Error();
     if(!confirm(`Importar ${data.length} registros? Os atuais serão substituídos.`))return;
-    dbSave(data);renderHistory();toast('Backup importado.');
+    dbSave(data);
+    const opts=optionsLoad();
+    data.forEach(r=>{
+      const p=normalizeUpper(r.produto),c=normalizeUpper(r.cultura);
+      if(p&&!opts.produtos.includes(p))opts.produtos.push(p);
+      if(c&&!opts.culturas.includes(c))opts.culturas.push(c);
+    });
+    optionsSave(opts);renderReusableOptions();renderHistory();toast('Backup importado.');
   }catch{toast('Arquivo de backup inválido.')}
   e.target.value='';
 });
@@ -230,4 +321,4 @@ if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 }
 
-resetForm();renderHistory();
+bootstrapReusableOptions();renderReusableOptions();resetForm();renderHistory();
