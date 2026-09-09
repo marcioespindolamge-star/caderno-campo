@@ -1,6 +1,6 @@
-const CACHE='paineira-caderno-v8';
+const CACHE='paineira-caderno-v9';
 const ASSETS=[
-  './','./index.html','./styles.css?v=8','./app.js?v=8','./manifest.webmanifest',
+  './','./index.html','./styles.css?v=9','./app.js?v=9','./manifest.webmanifest',
   './assets/logo-paineira.png','./icons/icon-180.png','./icons/icon-192.png','./icons/icon-512.png'
 ];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)))});
@@ -11,5 +11,5 @@ self.addEventListener('fetch',e=>{
     e.respondWith(fetch(e.request,{cache:'no-store'}).then(r=>{const c=r.clone();caches.open(CACHE).then(k=>k.put('./index.html',c));return r}).catch(()=>caches.match('./index.html')));
     return;
   }
-  e.respondWith(fetch(e.request).then(r=>{if(r.ok&&new URL(e.request.url).origin===self.location.origin){const c=r.clone();caches.open(CACHE).then(k=>k.put(e.request,c))}return r}).catch(()=>caches.match(e.request)));
+  e.respondWith(fetch(e.request,{cache:'no-store'}).then(r=>{if(r.ok&&new URL(e.request.url).origin===self.location.origin){const c=r.clone();caches.open(CACHE).then(k=>k.put(e.request,c))}return r}).catch(()=>caches.match(e.request)));
 });
